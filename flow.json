@@ -1,0 +1,38 @@
+{
+  "contracts": {
+    "IrisBounty": {
+      "source": "cadence/contracts/IrisBounty.cdc",
+      "aliases": {
+        "testing": "0000000000000007"
+      }
+    },
+    "VisionNFT": {
+      "source": "cadence/contracts/VisionNFT.cdc",
+      "aliases": {
+        "testing": "0000000000000007"
+      }
+    }
+  },
+  "networks": {
+    "emulator": "127.0.0.1:3569",
+    "testing": "127.0.0.1:3569",
+    "testnet": "access.devnet.nodes.onflow.org:9000"
+  },
+  "accounts": {
+    "testnet-iris": {
+      "address": "$FLOW_TESTNET_ADDRESS",
+      "key": {
+        "type": "hex",
+        "index": 0,
+        "signatureAlgorithm": "ECDSA_P256",
+        "hashAlgorithm": "SHA3_256",
+        "privateKey": "$FLOW_DEPLOYER_PRIVATE_KEY"
+      }
+    }
+  },
+  "deployments": {
+    "testnet": {
+      "testnet-iris": ["IrisBounty", "VisionNFT"]
+    }
+  }
+}
