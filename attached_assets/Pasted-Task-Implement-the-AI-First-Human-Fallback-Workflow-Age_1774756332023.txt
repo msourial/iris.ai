@@ -1,0 +1,39 @@
+Task: Implement the "AI First, Human Fallback" Workflow
+
+Agent, we need to finalize the core functional loop of Iris.ai. We are using a "Community Sponsor Pool" model, meaning the visually impaired user never pays for help.
+
+Please build the following UI and logic flow into our Camera/Result screen:
+
+Step 1: The Free AI Analysis (Default)
+
+User taps the giant Yellow "Capture" button.
+
+The app plays Speech.speak("Analyzing with AI...").
+
+We call the AI Vision API (mocked or real) and display the text: e.g., "This is a plastic bottle with a white cap."
+
+The app reads this result aloud.
+
+Step 2: The Human Escalate Button
+
+Below the AI result, render a massive, high-contrast button: "Ask a Human (Free - Sponsored)".
+
+Add a subtext label: "For critical details like expiration dates."
+
+Step 3: The Web3 Escrow & Mocked Helper Flow
+When the user taps "Ask a Human", execute this sequence to simulate our Web3 backend for the demo:
+
+The Freeze: Play Speech.speak("Uploading to secure decentralized storage..."). Display a loading state. (In reality, this is where we upload to Storacha and get a CID).
+
+The Escrow: Play Speech.speak("Securing community bounty on the Flow blockchain..."). Display a mock transaction ID (e.g., 0x8f...3a2). (This represents our Cadence smart contract locking 1 FLOW from the community pool).
+
+The Wait: Display a timer or pulsing UI: "Waiting for a sighted volunteer..."
+
+The Resolution (The Mock): Set a setTimeout for 6 seconds to simulate a human volunteer answering from their phone.
+
+The Reward: When the timeout finishes, play a success chime. Display the human's answer: "The expiration date is April 12th, 2026." and read it aloud with Speech.speak.
+
+Show a small toast notification at the bottom: "1 FLOW token rewarded to Volunteer #492".
+
+Constraints:
+Keep the UI strictly Black (#000000) and Yellow (#FFD700). Ensure every single state change has a corresponding Speech.speak() announcement so a visually impaired user knows exactly what the blockchain and the human are doing.
