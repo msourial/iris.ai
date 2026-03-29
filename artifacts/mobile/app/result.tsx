@@ -154,10 +154,11 @@ export default function ResultScreen() {
   const handleReadAgain = () => {
     const textToRead =
       humanStage === 'resolved' ? MOCK_HUMAN_ANSWER : aiResult ?? '';
+    const rate = humanStage === 'resolved' ? 0.85 : 0.9;
     if (textToRead) {
       Speech.stop();
       setTimeout(() => {
-        Speech.speak(textToRead, { rate: 0.9, pitch: 1.0, language: 'en-US' });
+        Speech.speak(textToRead, { rate, pitch: 1.0, language: 'en-US' });
       }, 200);
     }
     Haptics.selectionAsync();
