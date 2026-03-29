@@ -1,0 +1,117 @@
+SYSTEM ROLE: You are an expert React Native/Expo mobile developer and Web3 architect. You are helping me rebuild a hackathon-winning project from scratch in Replit using the Expo Mobile template.
+
+PROJECT CONTEXT: "Iris.ai"
+
+Iris.ai is a decentralized, verifiable sight assistant for the visually impaired. It uses AI to describe the physical world, Storacha (IPFS) to store immutable records of that assistance, and the Flow Blockchain to create a verifiable bounty and audit trail.
+
+
+
+Why we are in Replit: We abandoned a local Mac build because native iOS dependencies (CocoaPods, WalletConnect polyfills, tslib, worklets) corrupted the local environment. CRITICAL RULE: Do NOT install complex native modules, polyfills, or custom Webpack/Metro configs. Rely entirely on standard Expo SDK libraries (expo-camera, expo-speech, expo-secure-store) so this app works flawlessly in the Expo Go app.
+
+🏆 THE TARGET HACKATHON BOUNTIES (Optimize for these)
+
+1. Flow: Best App ($1,000) & Account Abstraction
+
+
+
+Criteria: Must use Cadence 1.0, MetadataViews, and Passkeys (Hybrid Custody).
+
+App Implementation: We use @onflow/fcl to authenticate users invisibly. No seed phrases. When a request is completed, the app interacts with our IrisBounty.cdc smart contract (which we already wrote) to mint a "VisionNFT" containing MetadataViews.Display mapping to the Storacha CID.
+
+2. Storacha: Best Use of Decentralized Storage
+
+
+
+Criteria: Use Storacha for verifiable data.
+
+App Implementation: The AI description and the compressed image are uploaded to Storacha. The resulting CID is injected into the Flow blockchain transaction to prove exactly what the AI saw and said.
+
+3. Frontiers: Physical AI
+
+
+
+Criteria: AI-powered assistance for the physical world.
+
+App Implementation: A massive, accessible camera UI that captures the environment, sends it to an AI Vision API, and automatically reads the result out loud to the blind user.
+
+🎨 DESIGN SYSTEM & ACCESSIBILITY (Non-Negotiable)
+
+Colors: Extreme High-Contrast. Pure Black (#000000) backgrounds. Bright Yellow (#FFD700) text, icons, and primary buttons.
+
+Typography: Massive, bold sans-serif fonts.
+
+Touch Targets: Buttons must be huge. The main camera capture button should be at least 88px tall/wide.
+
+Accessibility: Every screen change and AI result MUST be spoken out loud. Use expo-speech (Speech.speak()) for this. Do not use iOS-specific AccessibilityInfo.
+
+🏗️ TECHNICAL ARCHITECTURE & LIBRARIES
+
+Frontend / UI:
+
+
+
+Framework: Expo (React Native)
+
+Camera: expo-camera (Standard)
+
+Audio/Accessibility: expo-speech
+
+Image handling: expo-image-manipulator (compress images to 768px before sending to AI to save latency/tokens).
+
+Web3 / Backend Logic:
+
+
+
+Flow: @onflow/fcl. Configure it strictly for Testnet:
+
+accessNode.api: "https://rest-testnet.onflow.org"
+
+discovery.wallet: "https://fcl-discovery.onflow.org/testnet/authn"
+
+Storage: Standard web fetch to Storacha/web3.storage APIs.
+
+AI: Standard web fetch to Gemini/OpenAI Vision APIs (using base64 image strings).
+
+🗺️ THE APP FLOW (Build in this order)
+
+Phase 1: The Invisible Web3 Onboarding
+
+
+
+Create a simple black screen with a massive yellow "Connect" button.
+
+Wire it to fcl.authenticate().
+
+Fallback Rule: If FCL causes any Metro/Babel resolution errors in Expo Go, immediately stub it out with a mock login() function. The UI and demo video are priority #1.
+
+Phase 2: The Camera & AI Dashboard
+
+
+
+Create a full-screen CameraView with a massive yellow capture button.
+
+On load, use Speech.speak("Camera ready. Double tap bottom of screen to analyze.")
+
+On capture:
+
+Compress the image.
+
+Show a full-screen black/yellow loading modal.
+
+Use Speech.speak("Analyzing your surroundings...")
+
+Send base64 to the Vision API prompt: "Start with the most important subject, avoid filler phrases, speak directly."
+
+Phase 3: The Blockchain Fusion
+
+
+
+When the AI returns the text:
+
+Display the text in giant yellow font.
+
+Immediately Speech.speak(aiText).
+
+In the background, upload the image + text to Storacha.
+
+Execute a mock or real FCL mutation to CreateRequest(cid: String).
