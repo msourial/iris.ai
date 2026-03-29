@@ -1,0 +1,43 @@
+Task: Replace Mock Data with Real expo-camera and Gemini Vision API
+
+Agent, our UI shell is perfect. Now we need to wire up the real functionality for the Camera and the AI Vision. Please update the app with the following logic.
+
+Step 1: Environment Variables
+Assume I have added my Gemini API key to the Replit environment variables as EXPO_PUBLIC_GEMINI_API_KEY.
+
+Step 2: Real Camera Integration
+Update the Camera Screen to use the real expo-camera:
+
+Request camera permissions when the screen mounts. If denied, show a high-contrast text message: "Camera permission is required."
+
+Replace the mock camera view with the live <CameraView> from expo-camera.
+
+When the giant yellow "Capture" button is pressed, use cameraRef.current.takePictureAsync({ base64: true, quality: 0.5 }) to capture the image. We use quality: 0.5 to keep the payload lightweight for the API.
+
+Step 3: Real Gemini AI Integration
+Create a utility function to call the Gemini API directly using standard fetch (do not install any heavy Google SDKs, keep it lightweight for Expo):
+
+Endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.EXPO_PUBLIC_GEMINI_API_KEY}
+
+Method: POST
+
+Payload Structure: Pass the base64 image data and the text prompt.
+
+Prompt: "You are an assistant for a visually impaired person. Describe the primary subjects in this image clearly, concisely, and directly in 2-3 sentences. Do not use filler words."
+
+Extract the text response from the Gemini JSON payload.
+
+Step 4: The Loading & Result Flow
+Wire the camera capture directly into the AI call:
+
+User taps "Capture".
+
+Immediately show the black/yellow loading state and trigger Speech.speak("Analyzing your surroundings...").
+
+Send the base64 image to the Gemini fetch function.
+
+When the API returns the description, navigate to the Result Screen, display the real text, and immediately trigger Speech.speak(aiResult).
+
+Keep the "Ask a Human" button exactly as it is (we will wire up the Flow blockchain logic for that next).
+
+Constraints: Ensure you handle API errors gracefully. If the API fails, display "Error analyzing image. Please try again." and read that error aloud using expo-speech.
