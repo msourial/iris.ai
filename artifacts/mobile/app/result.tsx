@@ -19,9 +19,8 @@ import { useApp } from '@/context/AppContext';
 type HumanStage = 'idle' | 'freezing' | 'escrow' | 'waiting' | 'resolved';
 
 const MOCK_TX_ID = '0x8f4e...3a2b';
-const MOCK_HUMAN_ANSWER =
-  'The expiration date is April 12th, 2026. The product is a vitamin C supplement by Nature Made.';
-const MOCK_TOAST = '1 FLOW token rewarded to Volunteer #492';
+const MOCK_HUMAN_ANSWER = 'The expiration date is April 2026.';
+const MOCK_TOAST = '1 FLOW token rewarded to Volunteer #429';
 
 const BLOCKCHAIN_LABELS: Record<string, string> = {
   idle: '',
@@ -38,7 +37,7 @@ export default function ResultScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
   const [humanStage, setHumanStage] = useState<HumanStage>('idle');
-  const [waitSeconds, setWaitSeconds] = useState(6);
+  const [waitSeconds, setWaitSeconds] = useState(3);
   const stageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -78,7 +77,7 @@ export default function ResultScreen() {
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (humanStage === 'waiting') {
-      setWaitSeconds(6);
+      setWaitSeconds(3);
       interval = setInterval(() => {
         setWaitSeconds((s) => Math.max(0, s - 1));
       }, 1000);
@@ -116,7 +115,7 @@ export default function ResultScreen() {
     Speech.stop();
 
     setHumanStage('freezing');
-    Speech.speak('Uploading to secure decentralized storage.', { rate: 0.9, language: 'en-US' });
+    Speech.speak('Securing community bounty for a volunteer.', { rate: 0.9, language: 'en-US' });
 
     const t1 = setTimeout(() => {
       setHumanStage('escrow');
@@ -133,11 +132,11 @@ export default function ResultScreen() {
             Speech.speak(MOCK_HUMAN_ANSWER, { rate: 0.85, pitch: 1.0, language: 'en-US' });
           }, 300);
           showToast();
-        }, 6000);
+        }, 2500);
         stageTimers.current.push(t3);
-      }, 2500);
+      }, 1500);
       stageTimers.current.push(t2);
-    }, 2000);
+    }, 1000);
     stageTimers.current.push(t1);
   };
 
