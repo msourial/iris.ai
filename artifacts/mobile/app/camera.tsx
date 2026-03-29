@@ -116,7 +116,7 @@ export default function CameraScreen() {
       if (Platform.OS !== 'web' && cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({
           base64: true,
-          quality: 0.8,
+          quality: 0.5,
           exif: false,
         });
 
@@ -160,7 +160,7 @@ export default function CameraScreen() {
     } catch (e) {
       console.error('[Iris] Capture error:', e);
       setIsAnalyzing(false);
-      Speech.speak('Analysis failed. Please try again.');
+      Speech.speak('Error analyzing image. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };

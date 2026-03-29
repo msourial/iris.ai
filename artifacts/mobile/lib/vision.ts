@@ -19,7 +19,7 @@ const GEMINI_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 export const VISION_PROMPT =
-  'You are an assistant for a visually impaired person. Describe the primary subjects in this image clearly, concisely, and directly. Do not use filler words.';
+  'You are an assistant for a visually impaired person. Describe the primary subjects in this image clearly, concisely, and directly in 2-3 sentences. Do not use filler words.';
 
 const MOCK_DESCRIPTIONS = [
   'A wooden desk with an open laptop, a coffee mug on the right, and papers scattered around. Natural light comes from a window on the left.',
