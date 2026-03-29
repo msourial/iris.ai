@@ -102,11 +102,15 @@ export async function mintVisionNFT(cid: string): Promise<string> {
   }
 
   try {
+    const contractAddress =
+      process.env.EXPO_PUBLIC_IRIS_BOUNTY_ADDRESS ?? '0xYOUR_CONTRACT_ADDRESS';
+
     const txId = await fcl.mutate({
       cadence: `
-        import IrisBounty from 0xYOUR_CONTRACT_ADDRESS
+        import IrisBounty from ${contractAddress}
+
         transaction(cid: String) {
-          prepare(signer: AuthAccount) {
+          prepare(signer: &Account) {
             IrisBounty.createRequest(cid: cid, signer: signer)
           }
         }

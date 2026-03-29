@@ -1,8 +1,16 @@
 /**
- * Set to false and configure W3_STORAGE_KEY to use real Storacha / web3.storage.
- * Default true — returns a mock CID for demo purposes.
+ * Storacha / web3.storage upload integration.
+ *
+ * Drop-in activation (zero code change):
+ *   - Set EXPO_PUBLIC_W3_STORAGE_KEY to your web3.storage API key
+ *   - If the key is absent, the module automatically falls back to mock mode.
+ *
+ * Force mock regardless of key:
+ *   - Set EXPO_PUBLIC_USE_MOCK_STORACHA=true
  */
-export const USE_MOCK_STORACHA = true;
+const forcesMock = process.env.EXPO_PUBLIC_USE_MOCK_STORACHA === 'true';
+const storageKey = process.env.EXPO_PUBLIC_W3_STORAGE_KEY;
+const USE_MOCK_STORACHA = forcesMock || !storageKey;
 
 function generateMockCid(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz234567';
@@ -21,6 +29,7 @@ export interface StorachaResult {
 /**
  * Uploads the compressed image (base64) and AI text to Storacha.
  * Returns the IPFS CID for use in the Flow blockchain transaction.
+ * Automatically uses real Storacha when EXPO_PUBLIC_W3_STORAGE_KEY is set.
  */
 export async function uploadToStoracha(
   imageBase64: string,
@@ -34,9 +43,6 @@ export async function uploadToStoracha(
   }
 
   try {
-    const apiKey = process.env.EXPO_PUBLIC_W3_STORAGE_KEY;
-    if (!apiKey) throw new Error('W3_STORAGE_KEY not configured');
-
     const metadata = JSON.stringify({
       version: '1.0',
       timestamp: new Date().toISOString(),
@@ -44,30 +50,38 @@ export async function uploadToStoracha(
       app: 'Iris.ai',
     });
 
+    const imageBlob = base64ToBlob(imageBase64, 'image/jpeg');
+    const metaBlob = new Blob([metadata], { type: 'application/json' });
+
     const formData = new FormData();
-    formData.append(
-      'file',
-      new Blob([Buffer.from(imageBase64, 'base64')], { type: 'image/jpeg' }),
-      'iris-capture.jpg'
-    );
-    formData.append(
-      'metadata',
-      new Blob([metadata], { type: 'application/json' }),
-      'metadata.json'
-    );
+    formData.append('file', imageBlob, 'iris-capture.jpg');
+    formData.append('metadata', metaBlob, 'metadata.json');
 
     const response = await fetch('https://api.web3.storage/upload', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { Authorization: `Bearer ${storageKey}` },
       body: formData,
     });
 
-    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(`Storacha responded with status ${response.status}`);
+    }
+
+    const json = (await response.json()) as { cid: string };
     const cid = json.cid;
     return { cid, url: `https://ipfs.io/ipfs/${cid}` };
   } catch (e) {
-    console.error('[Iris] Storacha upload failed:', e);
+    console.error('[Iris] Storacha upload failed, returning mock CID:', e);
     const cid = generateMockCid();
     return { cid, url: `https://ipfs.io/ipfs/${cid}` };
   }
+}
+
+function base64ToBlob(base64: string, mimeType: string): Blob {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType });
 }
