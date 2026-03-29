@@ -16,7 +16,7 @@ import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
-import { analyzeImage, DEFAULT_VISION_PROMPT } from '@/lib/ai';
+import { describeImage } from '@/lib/vision';
 import { uploadToStoracha } from '@/lib/storacha';
 import { mintVisionNFT } from '@/lib/flow';
 
@@ -123,7 +123,7 @@ export default function CameraScreen() {
         if (imageManipulatorModule) {
           const compressed = await imageManipulatorModule.manipulateAsync(
             photo.uri,
-            [{ resize: { width: 768 } }],
+            [{ resize: { width: 800 } }],
             {
               compress: 0.75,
               format: imageManipulatorModule.SaveFormat.JPEG,
@@ -138,7 +138,7 @@ export default function CameraScreen() {
 
       setCapturedImageBase64(base64);
 
-      const result = await analyzeImage(base64, DEFAULT_VISION_PROMPT);
+      const result = await describeImage(base64);
       setAiResult(result);
       setIsAnalyzing(false);
 
