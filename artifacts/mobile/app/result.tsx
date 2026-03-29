@@ -16,11 +16,11 @@ import * as Haptics from 'expo-haptics';
 import { Colors } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
 
-type HumanStage = 'idle' | 'freezing' | 'escrow' | 'waiting' | 'resolved';
+type HumanStage = 'idle' | 'freezing' | 'escrow' | 'resolved';
 
 const MOCK_TX_ID = '0x8f4e...3a2b';
 const MOCK_HUMAN_ANSWER = 'The expiration date is April 2026.';
-const MOCK_TOAST = '1 FLOW token rewarded to Volunteer #429';
+const MOCK_TOAST = '1 FLOW token rewarded to Volunteer #429.';
 
 const BLOCKCHAIN_LABELS: Record<string, string> = {
   idle: '',
@@ -37,7 +37,6 @@ export default function ResultScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
   const [humanStage, setHumanStage] = useState<HumanStage>('idle');
-  const [waitSeconds, setWaitSeconds] = useState(3);
   const stageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,7 +59,7 @@ export default function ResultScreen() {
   }, [aiResult]);
 
   useEffect(() => {
-    if (humanStage === 'waiting' || humanStage === 'freezing' || humanStage === 'escrow') {
+    if (humanStage === 'freezing' || humanStage === 'escrow') {
       const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.06, duration: 800, useNativeDriver: true }),
@@ -73,19 +72,6 @@ export default function ResultScreen() {
       pulseAnim.setValue(1);
     }
   }, [humanStage, pulseAnim]);
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (humanStage === 'waiting') {
-      setWaitSeconds(3);
-      interval = setInterval(() => {
-        setWaitSeconds((s) => Math.max(0, s - 1));
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [humanStage]);
 
   const showToast = useCallback(() => {
     Animated.sequence([
@@ -115,26 +101,20 @@ export default function ResultScreen() {
     Speech.stop();
 
     setHumanStage('freezing');
-    Speech.speak('Securing community bounty for a volunteer.', { rate: 0.9, language: 'en-US' });
+    Speech.speak('Securing community bounty for a volunteer...', { rate: 0.9, language: 'en-US' });
 
     const t1 = setTimeout(() => {
       setHumanStage('escrow');
       Speech.speak('Securing community bounty on the Flow blockchain.', { rate: 0.9, language: 'en-US' });
 
       const t2 = setTimeout(() => {
-        setHumanStage('waiting');
-        Speech.speak('Waiting for a sighted volunteer.', { rate: 0.9, language: 'en-US' });
-
-        const t3 = setTimeout(() => {
-          setHumanStage('resolved');
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          speechTimer.current = setTimeout(() => {
-            Speech.speak(MOCK_HUMAN_ANSWER, { rate: 0.85, pitch: 1.0, language: 'en-US' });
-          }, 300);
-          showToast();
-        }, 2500);
-        stageTimers.current.push(t3);
-      }, 1500);
+        setHumanStage('resolved');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        speechTimer.current = setTimeout(() => {
+          Speech.speak(MOCK_HUMAN_ANSWER, { rate: 0.85, pitch: 1.0, language: 'en-US' });
+        }, 300);
+        showToast();
+      }, 2500);
       stageTimers.current.push(t2);
     }, 1000);
     stageTimers.current.push(t1);
@@ -226,9 +206,9 @@ export default function ResultScreen() {
         </View>
       )}
 
-      {(humanStage === 'freezing' || humanStage === 'escrow' || humanStage === 'waiting') && (
+      {(humanStage === 'freezing' || humanStage === 'escrow') && (
         <Animated.View style={[styles.stagePanel, { transform: [{ scale: pulseAnim }] }]}>
-          <StageContent stage={humanStage} txId={MOCK_TX_ID} waitSeconds={waitSeconds} />
+          <StageContent stage={humanStage} txId={MOCK_TX_ID} />
         </Animated.View>
       )}
 
@@ -275,15 +255,7 @@ export default function ResultScreen() {
   );
 }
 
-function StageContent({
-  stage,
-  txId,
-  waitSeconds,
-}: {
-  stage: HumanStage;
-  txId: string;
-  waitSeconds: number;
-}) {
+function StageContent({ stage, txId }: { stage: HumanStage; txId: string }) {
   if (stage === 'freezing') {
     return (
       <>
@@ -300,16 +272,6 @@ function StageContent({
         <Text style={styles.stageTitle}>Flow Escrow Active</Text>
         <Text style={styles.stageTxId}>{txId}</Text>
         <Text style={styles.stageSubtitle}>Locking 1 FLOW from community pool...</Text>
-      </>
-    );
-  }
-  if (stage === 'waiting') {
-    return (
-      <>
-        <Feather name="clock" size={36} color={Colors.yellow} />
-        <Text style={styles.stageTitle}>Waiting for Volunteer</Text>
-        <Text style={styles.waitTimer}>{waitSeconds}s</Text>
-        <Text style={styles.stageSubtitle}>A sighted community member is being notified...</Text>
       </>
     );
   }
@@ -464,12 +426,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     opacity: 0.6,
     letterSpacing: 1,
-  },
-  waitTimer: {
-    color: Colors.yellow,
-    fontSize: 48,
-    fontWeight: '700' as const,
-    fontFamily: 'Inter_700Bold',
   },
   bottomSection: {
     paddingHorizontal: 24,
