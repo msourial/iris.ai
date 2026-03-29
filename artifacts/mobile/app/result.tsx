@@ -40,6 +40,7 @@ export default function ResultScreen() {
   const [humanStage, setHumanStage] = useState<HumanStage>('idle');
   const [waitSeconds, setWaitSeconds] = useState(6);
   const stageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
@@ -99,6 +100,7 @@ export default function ResultScreen() {
     return () => {
       stageTimers.current.forEach(clearTimeout);
       stageTimers.current = [];
+      if (speechTimer.current) clearTimeout(speechTimer.current);
       Speech.stop();
     };
   }, []);
@@ -127,7 +129,7 @@ export default function ResultScreen() {
         const t3 = setTimeout(() => {
           setHumanStage('resolved');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setTimeout(() => {
+          speechTimer.current = setTimeout(() => {
             Speech.speak(MOCK_HUMAN_ANSWER, { rate: 0.85, pitch: 1.0, language: 'en-US' });
           }, 300);
           showToast();
@@ -162,10 +164,7 @@ export default function ResultScreen() {
   };
 
   const blockchainLabel = BLOCKCHAIN_LABELS[blockchainStatus] ?? '';
-  const blockchainColor =
-    blockchainStatus === 'done' || blockchainStatus === 'error'
-      ? Colors.yellow
-      : '#AAAAAA';
+  const blockchainColor = Colors.yellow;
 
   return (
     <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
@@ -335,7 +334,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: Colors.grayMid,
+    borderColor: Colors.yellow,
   },
   headerTitle: {
     flex: 1,
@@ -353,7 +352,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: Colors.grayMid,
+    borderColor: Colors.yellow,
   },
   resultContainer: {
     flex: 1,
