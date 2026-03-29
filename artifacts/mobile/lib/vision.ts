@@ -13,6 +13,8 @@ const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 const FORCE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK_VISION === 'true';
 const USE_MOCK = FORCE_MOCK || !GEMINI_API_KEY;
 
+let _missingKeyWarned = false;
+
 const GEMINI_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
@@ -44,10 +46,11 @@ interface GeminiResponse {
  */
 export async function describeImage(base64: string): Promise<string> {
   if (USE_MOCK || !base64) {
-    if (!GEMINI_API_KEY && !FORCE_MOCK) {
+    if (!GEMINI_API_KEY && !FORCE_MOCK && !_missingKeyWarned) {
+      _missingKeyWarned = true;
       console.warn(
-        '[Iris] EXPO_PUBLIC_GEMINI_API_KEY is not set — using mock description. ' +
-          'Set it in Secrets to enable real Gemini Vision.'
+        '[Iris] EXPO_PUBLIC_GEMINI_API_KEY is not set — using mock descriptions. ' +
+          'Add it in Replit Secrets to enable real Gemini Vision.'
       );
     }
     await new Promise<void>((r) => setTimeout(r, 1800 + Math.random() * 1200));
