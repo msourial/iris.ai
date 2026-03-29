@@ -16,7 +16,7 @@ const USE_MOCK = FORCE_MOCK || !GEMINI_API_KEY;
 let _missingKeyWarned = false;
 
 const GEMINI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 export const VISION_PROMPT =
   'You are assisting a visually impaired user. Describe the primary subjects in this image clearly, concisely, and directly in 1 or 2 direct sentences. Be highly accurate. No filler words.';
