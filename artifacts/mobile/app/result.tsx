@@ -37,8 +37,6 @@ export default function ResultScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
-  const waitingCountAnim = useRef(new Animated.Value(1)).current;
-
   const [humanStage, setHumanStage] = useState<HumanStage>('idle');
   const [waitSeconds, setWaitSeconds] = useState(6);
   const stageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -96,6 +94,14 @@ export default function ResultScreen() {
       Animated.timing(toastAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
     ]).start();
   }, [toastAnim]);
+
+  useEffect(() => {
+    return () => {
+      stageTimers.current.forEach(clearTimeout);
+      stageTimers.current = [];
+      Speech.stop();
+    };
+  }, []);
 
   const clearStageTimers = () => {
     stageTimers.current.forEach(clearTimeout);
@@ -157,11 +163,9 @@ export default function ResultScreen() {
 
   const blockchainLabel = BLOCKCHAIN_LABELS[blockchainStatus] ?? '';
   const blockchainColor =
-    blockchainStatus === 'done'
-      ? Colors.success
-      : blockchainStatus === 'error'
-      ? Colors.error
-      : Colors.grayLight;
+    blockchainStatus === 'done' || blockchainStatus === 'error'
+      ? Colors.yellow
+      : '#AAAAAA';
 
   return (
     <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
@@ -369,10 +373,11 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   noResultText: {
-    color: Colors.grayLight,
+    color: Colors.yellow,
     fontSize: 18,
     fontFamily: 'Inter_400Regular',
     textAlign: 'center',
+    opacity: 0.5,
   },
   resolvedBlock: {
     gap: 16,
@@ -422,16 +427,16 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   askHumanSubtext: {
-    color: Colors.grayLight,
+    color: Colors.yellow,
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-    opacity: 0.85,
+    opacity: 0.6,
   },
   stagePanel: {
     marginHorizontal: 24,
     marginBottom: 8,
-    backgroundColor: '#0D0D0D',
+    backgroundColor: Colors.black,
     borderWidth: 1.5,
     borderColor: Colors.yellow,
     borderRadius: 16,
@@ -448,11 +453,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   stageSubtitle: {
-    color: Colors.grayLight,
+    color: Colors.yellow,
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-    opacity: 0.85,
+    opacity: 0.6,
   },
   stageTxId: {
     color: Colors.yellow,
