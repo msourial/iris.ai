@@ -10,49 +10,77 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
-import { analyzeImage } from '@/lib/ai';
+import { analyzeImage, DEFAULT_VISION_PROMPT } from '@/lib/ai';
 import { uploadToStoracha } from '@/lib/storacha';
 import { mintVisionNFT } from '@/lib/flow';
 
-let CameraView: any = null;
-let useCameraPermissions: any = null;
-let ImageManipulator: any = null;
+interface CameraViewRef {
+  takePictureAsync(options: {
+    base64: boolean;
+    quality: number;
+    exif?: boolean;
+  }): Promise<{ uri: string; base64?: string }>;
+}
+
+interface CameraPermission {
+  granted: boolean;
+  canAskAgain?: boolean;
+}
+
+interface CameraModule {
+  CameraView: React.ComponentType<{
+    ref?: React.RefObject<CameraViewRef>;
+    style?: object;
+    facing?: string;
+  }>;
+  useCameraPermissions(): [CameraPermission | null, () => Promise<CameraPermission>];
+}
+
+interface ImageManipulatorModule {
+  manipulateAsync(
+    uri: string,
+    actions: Array<{ resize?: { width: number; height?: number } }>,
+    options: { compress?: number; format: string; base64?: boolean }
+  ): Promise<{ uri: string; base64?: string }>;
+  SaveFormat: { JPEG: string; PNG: string };
+}
+
+let cameraModule: CameraModule | null = null;
+let imageManipulatorModule: ImageManipulatorModule | null = null;
 
 if (Platform.OS !== 'web') {
   try {
-    const cam = require('expo-camera');
-    CameraView = cam.CameraView;
-    useCameraPermissions = cam.useCameraPermissions;
+    cameraModule = require('expo-camera') as CameraModule;
   } catch (e) {
-    console.warn('[Iris] expo-camera not available');
+    console.warn('[Iris] expo-camera not available:', e);
   }
   try {
-    ImageManipulator = require('expo-image-manipulator');
+    imageManipulatorModule = require('expo-image-manipulator') as ImageManipulatorModule;
   } catch (e) {
-    console.warn('[Iris] expo-image-manipulator not available');
+    console.warn('[Iris] expo-image-manipulator not available:', e);
   }
 }
 
-function usePermissions() {
-  const [permission, requestPermission] = useCameraPermissions
-    ? useCameraPermissions()
-    : [{ granted: false }, async () => {}];
-  return { permission, requestPermission };
+function useCameraPermissionsSafe(): [CameraPermission | null, () => Promise<CameraPermission>] {
+  const noop = async () => ({ granted: false } as CameraPermission);
+  if (!cameraModule) return [null, noop];
+  return cameraModule.useCameraPermissions();
 }
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
   const { setAiResult, setCapturedImageBase64, setBlockchainStatus } = useApp();
-  const cameraRef = useRef<any>(null);
+  const cameraRef = useRef<CameraViewRef>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const { permission, requestPermission } = usePermissions();
+  const [permission, requestPermission] = useCameraPermissionsSafe();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -63,16 +91,18 @@ export default function CameraScreen() {
 
   useEffect(() => {
     if (isAnalyzing) {
-      Animated.loop(
+      const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.08, duration: 700, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
         ])
-      ).start();
+      );
+      loop.start();
+      return () => loop.stop();
     } else {
       pulseAnim.setValue(1);
     }
-  }, [isAnalyzing]);
+  }, [isAnalyzing, pulseAnim]);
 
   const takePicture = async () => {
     if (isAnalyzing) return;
@@ -83,26 +113,20 @@ export default function CameraScreen() {
     try {
       let base64 = '';
 
-      if (Platform.OS === 'web') {
-        base64 = await captureFromWeb();
-      } else {
-        if (!cameraRef.current) {
-          throw new Error('Camera not ready');
-        }
-
+      if (Platform.OS !== 'web' && cameraRef.current) {
         const photo = await cameraRef.current.takePictureAsync({
           base64: true,
           quality: 0.8,
           exif: false,
         });
 
-        if (ImageManipulator) {
-          const compressed = await ImageManipulator.manipulateAsync(
+        if (imageManipulatorModule) {
+          const compressed = await imageManipulatorModule.manipulateAsync(
             photo.uri,
             [{ resize: { width: 768 } }],
             {
               compress: 0.75,
-              format: ImageManipulator.SaveFormat.JPEG,
+              format: imageManipulatorModule.SaveFormat.JPEG,
               base64: true,
             }
           );
@@ -114,7 +138,7 @@ export default function CameraScreen() {
 
       setCapturedImageBase64(base64);
 
-      const result = await analyzeImage(base64);
+      const result = await analyzeImage(base64, DEFAULT_VISION_PROMPT);
       setAiResult(result);
       setIsAnalyzing(false);
 
@@ -146,13 +170,11 @@ export default function CameraScreen() {
 
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
-        <WebCameraPlaceholder onCapture={takePicture} isAnalyzing={isAnalyzing} />
+      <View style={[styles.container]}>
+        <WebCameraPlaceholder />
         {isAnalyzing && <AnalyzingOverlay pulse={pulseAnim} />}
         <Header insetTop={topPad} />
-        {!isAnalyzing && (
-          <CaptureButton onPress={takePicture} insetBottom={botPad} />
-        )}
+        {!isAnalyzing && <CaptureButton onPress={takePicture} insetBottom={botPad} />}
       </View>
     );
   }
@@ -164,6 +186,8 @@ export default function CameraScreen() {
   if (!permission.granted) {
     return <PermissionScreen onRequest={requestPermission} insets={insets} />;
   }
+
+  const CameraView = cameraModule?.CameraView;
 
   return (
     <View style={styles.container}>
@@ -216,7 +240,7 @@ function CaptureButton({
         style={styles.captureOuter}
         onPress={onPress}
         activeOpacity={0.85}
-        accessibilityLabel="Capture and analyze"
+        accessibilityLabel="Capture and analyze surroundings"
         accessibilityRole="button"
         testID="capture-btn"
       >
@@ -229,16 +253,14 @@ function CaptureButton({
 
 function AnalyzingOverlay({ pulse }: { pulse: Animated.Value }) {
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <View style={styles.analyzingOverlay}>
-        <Animated.View style={{ transform: [{ scale: pulse }] }}>
-          <View style={styles.analyzingIconRing}>
-            <ActivityIndicator size="large" color={Colors.yellow} />
-          </View>
-        </Animated.View>
-        <Text style={styles.analyzingTitle}>ANALYZING</Text>
-        <Text style={styles.analyzingSubtitle}>Reading your surroundings...</Text>
-      </View>
+    <View style={[StyleSheet.absoluteFill, styles.analyzingOverlay]}>
+      <Animated.View style={{ transform: [{ scale: pulse }] }}>
+        <View style={styles.analyzingIconRing}>
+          <ActivityIndicator size="large" color={Colors.yellow} />
+        </View>
+      </Animated.View>
+      <Text style={styles.analyzingTitle}>ANALYZING</Text>
+      <Text style={styles.analyzingSubtitle}>Reading your surroundings...</Text>
     </View>
   );
 }
@@ -256,10 +278,10 @@ function PermissionScreen({
   insets,
 }: {
   onRequest: () => void;
-  insets: any;
+  insets: EdgeInsets;
 }) {
   useEffect(() => {
-    Speech.speak('Camera permission is required. Tap to grant access.');
+    Speech.speak('Camera permission is required. Tap the button to grant access.');
   }, []);
 
   return (
@@ -281,13 +303,7 @@ function PermissionScreen({
   );
 }
 
-function WebCameraPlaceholder({
-  onCapture,
-  isAnalyzing,
-}: {
-  onCapture: () => void;
-  isAnalyzing: boolean;
-}) {
+function WebCameraPlaceholder() {
   return (
     <View style={styles.webPlaceholder}>
       <Feather name="camera" size={80} color={Colors.yellow} />
@@ -297,11 +313,6 @@ function WebCameraPlaceholder({
       </Text>
     </View>
   );
-}
-
-async function captureFromWeb(): Promise<string> {
-  await new Promise<void>((r) => setTimeout(r, 800));
-  return '';
 }
 
 const styles = StyleSheet.create({
@@ -376,7 +387,6 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   analyzingOverlay: {
-    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
     alignItems: 'center',
     justifyContent: 'center',

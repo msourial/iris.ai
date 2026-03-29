@@ -1,46 +1,81 @@
 import type { FlowUser } from '@/context/AppContext';
 
-/**
- * Set to false to use real @onflow/fcl with Flow Testnet.
- * Default true for Expo Go stability — mock auth returns a fake wallet address.
- */
-export const USE_MOCK_FCL = true;
+interface FCLModule {
+  config(settings: Record<string, string>): void;
+  authenticate(): Promise<{ addr: string; loggedIn: boolean }>;
+  unauthenticate(): Promise<void>;
+  mutate(opts: {
+    cadence: string;
+    args?: (
+      arg: (val: string, type: unknown) => unknown,
+      t: { String: unknown }
+    ) => unknown[];
+    proposer?: unknown;
+    payer?: unknown;
+    authorizations?: unknown[];
+    limit?: number;
+  }): Promise<string>;
+  authz: unknown;
+}
 
 const MOCK_USER: FlowUser = {
   addr: '0xf8d6e0586b0a20c7',
   loggedIn: true,
 };
 
-export async function authenticate(): Promise<FlowUser> {
-  if (USE_MOCK_FCL) {
-    await new Promise<void>((r) => setTimeout(r, 1500));
-    return MOCK_USER;
-  }
+/**
+ * Set EXPO_PUBLIC_USE_MOCK_FCL=true to bypass FCL entirely (UI demos, Expo Go).
+ * By default the app attempts real Flow Testnet auth and falls back to mock on error.
+ */
+const USE_MOCK_FCL = process.env.EXPO_PUBLIC_USE_MOCK_FCL === 'true';
 
+async function loadFCL(): Promise<FCLModule | null> {
   try {
-    const fclModule = await import('@onflow/fcl');
-    const fcl = (fclModule as any).default ?? fclModule;
-
+    const mod = await import('@onflow/fcl');
+    const fcl = (mod.default ?? mod) as FCLModule;
     fcl.config({
       'accessNode.api': 'https://rest-testnet.onflow.org',
       'discovery.wallet': 'https://fcl-discovery.onflow.org/testnet/authn',
       'app.detail.title': 'Iris.ai',
       'app.detail.icon': '',
     });
+    return fcl;
+  } catch (e) {
+    console.warn('[Iris] FCL failed to load, using mock auth:', e);
+    return null;
+  }
+}
 
+function mockAuth(): Promise<FlowUser> {
+  return new Promise<FlowUser>((resolve) =>
+    setTimeout(() => resolve(MOCK_USER), 1000)
+  );
+}
+
+export async function authenticate(): Promise<FlowUser> {
+  if (USE_MOCK_FCL) {
+    return mockAuth();
+  }
+
+  const fcl = await loadFCL();
+  if (!fcl) return mockAuth();
+
+  try {
     const user = await fcl.authenticate();
     return { addr: user.addr, loggedIn: !!user.loggedIn };
   } catch (e) {
-    console.warn('[Iris] FCL failed, using mock auth:', e);
-    return MOCK_USER;
+    console.warn('[Iris] FCL authenticate failed, falling back to mock:', e);
+    return mockAuth();
   }
 }
 
 export async function unauthenticate(): Promise<void> {
   if (USE_MOCK_FCL) return;
+
+  const fcl = await loadFCL();
+  if (!fcl) return;
+
   try {
-    const fclModule = await import('@onflow/fcl');
-    const fcl = (fclModule as any).default ?? fclModule;
     await fcl.unauthenticate();
   } catch (e) {
     console.warn('[Iris] FCL unauthenticate failed:', e);
@@ -48,21 +83,25 @@ export async function unauthenticate(): Promise<void> {
 }
 
 /**
- * Calls CreateRequest(cid: String) on the IrisBounty contract.
- * Mocked by default.
+ * Calls CreateRequest(cid: String) on the IrisBounty contract on Flow Testnet.
+ * Falls back to a mock transaction when FCL is unavailable.
  */
 export async function mintVisionNFT(cid: string): Promise<string> {
   if (USE_MOCK_FCL) {
     await new Promise<void>((r) => setTimeout(r, 800));
-    const mockTxId = 'tx_' + Math.random().toString(36).substr(2, 16);
+    const mockTxId = 'tx_' + Math.random().toString(36).slice(2, 18);
     console.log('[Iris] Mock FCL: CreateRequest(cid:', cid, ') → txId:', mockTxId);
     return mockTxId;
   }
 
-  try {
-    const fclModule = await import('@onflow/fcl');
-    const fcl = (fclModule as any).default ?? fclModule;
+  const fcl = await loadFCL();
+  if (!fcl) {
+    const fallbackTxId = 'tx_fallback_' + Math.random().toString(36).slice(2, 10);
+    console.warn('[Iris] FCL unavailable, mock mint:', fallbackTxId);
+    return fallbackTxId;
+  }
 
+  try {
     const txId = await fcl.mutate({
       cadence: `
         import IrisBounty from 0xYOUR_CONTRACT_ADDRESS
@@ -72,7 +111,7 @@ export async function mintVisionNFT(cid: string): Promise<string> {
           }
         }
       `,
-      args: (arg: any, t: any) => [arg(cid, t.String)],
+      args: (arg, t) => [arg(cid, t.String)],
       proposer: fcl.authz,
       payer: fcl.authz,
       authorizations: [fcl.authz],
@@ -80,12 +119,12 @@ export async function mintVisionNFT(cid: string): Promise<string> {
     });
     return txId;
   } catch (e) {
-    console.warn('[Iris] FCL mintVisionNFT failed:', e);
-    return 'mock_fallback_tx';
+    console.warn('[Iris] FCL mintVisionNFT failed, using mock tx:', e);
+    return 'tx_error_fallback';
   }
 }
 
 export function formatAddr(addr: string): string {
-  if (!addr) return '0x???';
+  if (!addr || addr.length < 8) return '0x???';
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }

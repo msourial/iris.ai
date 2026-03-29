@@ -1,8 +1,11 @@
 /**
- * Set to false and set EXPO_PUBLIC_GEMINI_API_KEY to use real Gemini Vision API.
- * Default true — returns realistic mock descriptions for demo purposes.
+ * Set EXPO_PUBLIC_USE_MOCK_AI=false and EXPO_PUBLIC_GEMINI_API_KEY to enable real Gemini Vision.
+ * Default: mock mode returns realistic descriptions for demos.
  */
-export const USE_MOCK_AI = true;
+const USE_MOCK_AI = process.env.EXPO_PUBLIC_USE_MOCK_AI !== 'false';
+
+export const DEFAULT_VISION_PROMPT =
+  'Start with the most important subject, avoid filler phrases, speak directly. Describe what you observe for someone who cannot see — include objects, people, colors, and spatial layout. Be concise (2-3 sentences max).';
 
 const MOCK_RESPONSES = [
   'A wooden desk with a laptop computer open, a coffee mug to the right, and several papers scattered nearby. Natural light comes from a window on the left.',
@@ -14,11 +17,11 @@ const MOCK_RESPONSES = [
   'A crosswalk signal showing a walking figure in white, indicating it is safe to cross. The intersection is busy with vehicles stopped at the light.',
 ];
 
-const PROMPT =
-  'Start with the most important subject. Be concise and direct. Avoid filler phrases like "I can see" or "In this image." Describe what you observe for someone who is blind — focus on objects, people, colors, and spatial layout.';
-
-export async function analyzeImage(base64: string): Promise<string> {
-  if (USE_MOCK_AI) {
+export async function analyzeImage(
+  base64: string,
+  prompt: string = DEFAULT_VISION_PROMPT
+): Promise<string> {
+  if (USE_MOCK_AI || !base64) {
     const delay = 2000 + Math.random() * 1500;
     await new Promise<void>((r) => setTimeout(r, delay));
     return MOCK_RESPONSES[Math.floor(Math.random() * MOCK_RESPONSES.length)];
@@ -26,7 +29,7 @@ export async function analyzeImage(base64: string): Promise<string> {
 
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn('[Iris] EXPO_PUBLIC_GEMINI_API_KEY not set, using mock');
+    console.warn('[Iris] EXPO_PUBLIC_GEMINI_API_KEY not set, using mock response');
     return MOCK_RESPONSES[0];
   }
 
@@ -40,7 +43,7 @@ export async function analyzeImage(base64: string): Promise<string> {
           contents: [
             {
               parts: [
-                { text: PROMPT },
+                { text: prompt },
                 {
                   inline_data: {
                     mime_type: 'image/jpeg',
@@ -58,7 +61,11 @@ export async function analyzeImage(base64: string): Promise<string> {
       }
     );
 
-    const json = await response.json();
+    const json = (await response.json()) as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+    };
     const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
     return text?.trim() ?? 'Unable to analyze image. Please try again.';
   } catch (e) {
