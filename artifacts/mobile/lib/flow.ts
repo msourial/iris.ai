@@ -1,4 +1,5 @@
 import type { FlowUser } from '@/context/AppContext';
+import { Platform } from 'react-native';
 
 interface FCLModule {
   config(settings: Record<string, string>): void;
@@ -24,12 +25,15 @@ const MOCK_USER: FlowUser = {
 };
 
 /**
- * Set EXPO_PUBLIC_USE_MOCK_FCL=true to bypass FCL entirely (UI demos, Expo Go).
- * By default the app attempts real Flow Testnet auth and falls back to mock on error.
+ * FCL requires browser APIs (window, localStorage) that are not available
+ * in React Native. Always use mock on native platforms. Set
+ * EXPO_PUBLIC_USE_MOCK_FCL=false to attempt real FCL on web only.
  */
-const USE_MOCK_FCL = process.env.EXPO_PUBLIC_USE_MOCK_FCL === 'true';
+const IS_NATIVE = Platform.OS === 'ios' || Platform.OS === 'android';
+const USE_MOCK_FCL = IS_NATIVE || process.env.EXPO_PUBLIC_USE_MOCK_FCL === 'true';
 
 async function loadFCL(): Promise<FCLModule | null> {
+  if (IS_NATIVE) return null;
   try {
     const mod = await import('@onflow/fcl');
     const fcl = (mod.default ?? mod) as FCLModule;
