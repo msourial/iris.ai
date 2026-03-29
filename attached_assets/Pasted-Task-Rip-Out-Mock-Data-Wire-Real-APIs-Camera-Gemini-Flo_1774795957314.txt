@@ -1,0 +1,60 @@
+Task: Rip Out Mock Data & Wire Real APIs (Camera, Gemini, Flow FCL, Rewards)
+
+Agent, the UI looks great, but we are stuck on mock data. We need to implement the real functional logic. This app is for visually impaired users, so accessibility, social logins, and real camera data are mandatory.
+
+Please execute these 4 phases exactly as written:
+
+Phase 1: Real expo-camera & Permissions
+
+Remove all mock image data.
+
+Implement <CameraView> from expo-camera.
+
+Add a useEffect to explicitly request Camera.requestCameraPermissionsAsync().
+
+If permissions are denied, use expo-speech to say: "Camera access is required. Please enable it in your device settings."
+
+When the user taps the giant yellow "Capture" button, use takePictureAsync({ base64: true, quality: 0.5 }) and save the base64 string to state.
+
+Phase 2: Walletless Web3 Onboarding (Google Login via Flow)
+Our users will not use seed phrases. We are using standard Flow Account Abstraction via Blocto.
+
+Install @onflow/fcl.
+
+Configure FCL strictly for Flow Testnet at the root of the app:
+
+JavaScript
+import * as fcl from "@onflow/fcl";
+fcl.config({
+  "accessNode.api": "https://rest-testnet.onflow.org",
+  "discovery.wallet": "https://fcl-discovery.onflow.org/testnet/authn", // This enables Blocto Google Login automatically!
+  "app.detail.title": "Iris.ai"
+});
+Wire the "Connect Wallet" button to fcl.authenticate(). This will pop up a web-view where the user can log in with their Google account instantly.
+
+Save the returned user.addr to state and display it in the UI.
+
+Phase 3: Real Gemini AI Integration
+
+Use standard fetch to call the Gemini API: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.EXPO_PUBLIC_GEMINI_API_KEY}
+
+When the photo is taken, show a loading screen, trigger Speech.speak("Analyzing your surroundings"), and send the base64 string to Gemini.
+
+Prompt: "You are assisting a visually impaired user. Describe the core subject of this image in 1 or 2 direct sentences. Be highly accurate. No filler words."
+
+Display the returned text and immediately read it out loud using expo-speech.
+
+Phase 4: The Volunteer Reward System (Smart Contract Mock)
+We need a clear UI flow for when AI isn't enough (e.g., reading expiration dates) and a human volunteer steps in.
+
+Add an "Ask a Human Volunteer" button below the AI result.
+
+When pressed, trigger Speech.speak("Securing community bounty for a volunteer...").
+
+Show a loading state: "Escrowing 1 FLOW from Community Pool..."
+
+Use a setTimeout (5 seconds) to simulate the human answering.
+
+Return a mock answer (e.g., "The expiration date is April 2026."), read it aloud, and display a success toast: "1 FLOW token rewarded to Volunteer #429."
+
+Strict Rule: Do not use react-native-worklets-core or complex polyfills. Keep the FCL and Fetch implementations standard so they work natively inside the Expo Go mobile app.
