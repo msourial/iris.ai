@@ -114,9 +114,9 @@ export default function ResultScreen() {
           Speech.speak(MOCK_HUMAN_ANSWER, { rate: 0.85, pitch: 1.0, language: 'en-US' });
         }, 300);
         showToast();
-      }, 2500);
+      }, 3000);
       stageTimers.current.push(t2);
-    }, 1000);
+    }, 2000);
     stageTimers.current.push(t1);
   };
 
