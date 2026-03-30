@@ -31,6 +31,8 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="camera" />
       <Stack.Screen name="result" />
+      <Stack.Screen name="volunteer" />
+      <Stack.Screen name="volunteer-respond" />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

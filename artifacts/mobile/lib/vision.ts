@@ -9,6 +9,8 @@
  *   Set EXPO_PUBLIC_USE_MOCK_VISION=true
  */
 
+import * as Crypto from 'expo-crypto';
+
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 const FORCE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK_VISION === 'true';
 const USE_MOCK = FORCE_MOCK || !GEMINI_API_KEY;
@@ -20,6 +22,12 @@ const GEMINI_ENDPOINT =
 
 export const VISION_PROMPT =
   'You are assisting a visually impaired user. Describe the primary subjects in this image clearly, concisely, and directly in 1 or 2 direct sentences. Be highly accurate. No filler words.';
+
+export interface VisionResult {
+  description: string;
+  hash: string;
+  timestamp: string;
+}
 
 const MOCK_DESCRIPTIONS = [
   'A wooden desk with an open laptop, a coffee mug on the right, and papers scattered around. Natural light comes from a window on the left.',
@@ -40,11 +48,17 @@ interface GeminiResponse {
   error?: { message?: string };
 }
 
+async function computeHash(description: string, ts: string): Promise<string> {
+  const payload = `${VISION_PROMPT}|${description}|${ts}`;
+  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, payload);
+}
+
 /**
- * Send a base64 JPEG to Gemini Vision and return the accessibility description.
+ * Send a base64 JPEG to Gemini Vision and return the accessibility description
+ * along with a SHA-256 proof hash and timestamp for on-chain verification.
  * Automatically falls back to a mock description if the API key is not set.
  */
-export async function describeImage(base64: string): Promise<string> {
+export async function describeImage(base64: string): Promise<VisionResult> {
   if (USE_MOCK || !base64) {
     if (!GEMINI_API_KEY && !FORCE_MOCK && !_missingKeyWarned) {
       _missingKeyWarned = true;
@@ -54,7 +68,10 @@ export async function describeImage(base64: string): Promise<string> {
       );
     }
     await new Promise<void>((r) => setTimeout(r, 1800 + Math.random() * 1200));
-    return MOCK_DESCRIPTIONS[Math.floor(Math.random() * MOCK_DESCRIPTIONS.length)];
+    const description = MOCK_DESCRIPTIONS[Math.floor(Math.random() * MOCK_DESCRIPTIONS.length)];
+    const timestamp = new Date().toISOString();
+    const hash = await computeHash(description, timestamp);
+    return { description, hash, timestamp };
   }
 
   try {
@@ -86,7 +103,10 @@ export async function describeImage(base64: string): Promise<string> {
       const errBody = (await response.json().catch(() => ({}))) as GeminiResponse;
       const errMsg = errBody?.error?.message ?? `HTTP ${response.status}`;
       console.error('[Iris] Gemini API error:', errMsg);
-      return 'Could not analyze the image right now. Please try again.';
+      const description = 'Could not analyze the image right now. Please try again.';
+      const timestamp = new Date().toISOString();
+      const hash = await computeHash(description, timestamp);
+      return { description, hash, timestamp };
     }
 
     const json = (await response.json()) as GeminiResponse;
@@ -94,12 +114,20 @@ export async function describeImage(base64: string): Promise<string> {
 
     if (!text) {
       console.warn('[Iris] Gemini returned empty text');
-      return 'No description available. Please try again.';
+      const description = 'No description available. Please try again.';
+      const timestamp = new Date().toISOString();
+      const hash = await computeHash(description, timestamp);
+      return { description, hash, timestamp };
     }
 
-    return text;
+    const timestamp = new Date().toISOString();
+    const hash = await computeHash(text, timestamp);
+    return { description: text, hash, timestamp };
   } catch (e) {
     console.error('[Iris] Gemini fetch failed:', e);
-    return 'Analysis failed. Check your connection and try again.';
+    const description = 'Analysis failed. Check your connection and try again.';
+    const timestamp = new Date().toISOString();
+    const hash = await computeHash(description, timestamp);
+    return { description, hash, timestamp };
   }
 }

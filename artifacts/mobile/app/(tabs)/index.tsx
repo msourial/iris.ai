@@ -11,6 +11,7 @@ import {
 import { router } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
 import { authenticate, formatAddr } from '@/lib/flow';
@@ -18,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, user, login } = useApp();
+  const { isAuthenticated, user, role, login, setRole } = useApp();
   const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
@@ -29,10 +30,10 @@ export default function AuthScreen() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/camera');
+    if (isAuthenticated && role) {
+      router.replace(role === 'volunteer' ? '/volunteer' : '/camera');
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, role]);
 
   const handleConnect = async () => {
     if (isConnecting) return;
@@ -43,7 +44,7 @@ export default function AuthScreen() {
     try {
       const flowUser = await authenticate();
       login(flowUser);
-      Speech.speak('Wallet connected. Opening camera.');
+      Speech.speak('Wallet connected. Choose how you want to use Iris.');
     } catch (e) {
       console.error('[Iris] Auth error:', e);
       setIsConnecting(false);
@@ -51,8 +52,66 @@ export default function AuthScreen() {
     }
   };
 
+  const handleRoleSelect = (selectedRole: 'blind' | 'volunteer') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setRole(selectedRole);
+    if (selectedRole === 'blind') {
+      Speech.speak('Opening camera.');
+    } else {
+      Speech.speak('Opening volunteer queue.');
+    }
+  };
+
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
+
+  // Show role selection after wallet is connected
+  if (isAuthenticated && !role) {
+    return (
+      <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
+        <View style={styles.logoSection}>
+          <View style={styles.logoWrapper}>
+            <Image
+              source={require('@/assets/images/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={styles.appName}>IRIS.AI</Text>
+          <Text style={styles.tagline}>How would you like to help?</Text>
+          {user && <Text style={styles.addrText}>{formatAddr(user.addr)}</Text>}
+        </View>
+
+        <View style={styles.roleSection}>
+          <TouchableOpacity
+            style={styles.roleButton}
+            onPress={() => handleRoleSelect('blind')}
+            activeOpacity={0.8}
+            accessibilityLabel="I need help seeing. Tap to use the camera for AI vision assistance."
+            accessibilityRole="button"
+          >
+            <Feather name="eye" size={32} color={Colors.black} />
+            <Text style={styles.roleButtonTitle}>I Need Help</Text>
+            <Text style={styles.roleButtonSubtitle}>Get AI + human descriptions</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.roleButtonOutline}
+            onPress={() => handleRoleSelect('volunteer')}
+            activeOpacity={0.8}
+            accessibilityLabel="I want to volunteer. Tap to help visually impaired users by describing images."
+            accessibilityRole="button"
+          >
+            <Feather name="heart" size={32} color={Colors.yellow} />
+            <Text style={styles.roleButtonOutlineTitle}>I Want to Volunteer</Text>
+            <Text style={styles.roleButtonOutlineSubtitle}>Help others see the world</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.networkText}>Flow Testnet · Storacha · Gemini Vision</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
@@ -235,5 +294,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     fontFamily: 'Inter_400Regular',
+    paddingBottom: 12,
+  },
+  roleSection: {
+    gap: 16,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  roleButton: {
+    backgroundColor: Colors.yellow,
+    borderRadius: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: Colors.yellow,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  roleButtonTitle: {
+    color: Colors.black,
+    fontSize: 22,
+    fontWeight: '700' as const,
+    fontFamily: 'Inter_700Bold',
+  },
+  roleButtonSubtitle: {
+    color: Colors.black,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    opacity: 0.7,
+  },
+  roleButtonOutline: {
+    borderWidth: 2,
+    borderColor: Colors.yellow,
+    borderRadius: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    gap: 8,
+  },
+  roleButtonOutlineTitle: {
+    color: Colors.yellow,
+    fontSize: 22,
+    fontWeight: '700' as const,
+    fontFamily: 'Inter_700Bold',
+  },
+  roleButtonOutlineSubtitle: {
+    color: Colors.yellow,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    opacity: 0.6,
   },
 });

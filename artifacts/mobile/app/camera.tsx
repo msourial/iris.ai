@@ -75,7 +75,7 @@ function useCameraPermissionsSafe(): [CameraPermission | null, () => Promise<Cam
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
-  const { setAiResult, setCapturedImageBase64, setBlockchainStatus } = useApp();
+  const { setAiResult, setAiDescriptionHash, setImageCid, setCapturedImageBase64, setBlockchainStatus } = useApp();
   const cameraRef = useRef<CameraViewRef>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -138,15 +138,17 @@ export default function CameraScreen() {
 
       setCapturedImageBase64(base64);
 
-      const result = await describeImage(base64);
-      setAiResult(result);
+      const { description, hash, timestamp } = await describeImage(base64);
+      setAiResult(description);
+      setAiDescriptionHash(hash);
       setIsAnalyzing(false);
 
       router.push('/result');
 
       setBlockchainStatus('uploading');
-      uploadToStoracha(base64, result)
+      uploadToStoracha(base64, description)
         .then(({ cid }) => {
+          setImageCid(cid);
           setBlockchainStatus('minting');
           return mintVisionNFT(cid);
         })

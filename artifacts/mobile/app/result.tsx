@@ -15,12 +15,9 @@ import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/constants/colors';
 import { useApp } from '@/context/AppContext';
+import { createHelpRequest, getHelpRequest } from '@/lib/api';
 
 type HumanStage = 'idle' | 'freezing' | 'escrow' | 'resolved';
-
-const MOCK_TX_ID = '0x8f4e...3a2b';
-const MOCK_HUMAN_ANSWER = 'The expiration date is April 2026.';
-const MOCK_TOAST = '1 FLOW token rewarded to Volunteer #429.';
 
 const BLOCKCHAIN_LABELS: Record<string, string> = {
   idle: '',
@@ -32,13 +29,18 @@ const BLOCKCHAIN_LABELS: Record<string, string> = {
 
 export default function ResultScreen() {
   const insets = useSafeAreaInsets();
-  const { aiResult, blockchainStatus, setAiResult, setBlockchainStatus } = useApp();
+  const { aiResult, aiDescriptionHash, imageCid, blockchainStatus, user, setAiResult, setAiDescriptionHash, setImageCid, setBlockchainStatus, setCurrentRequestId } = useApp();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
   const [humanStage, setHumanStage] = useState<HumanStage>('idle');
+  const [volunteerAnswer, setVolunteerAnswer] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState('');
+  const [escrowTxId, setEscrowTxId] = useState<string | null>(null);
+  const [filecoinCid, setFilecoinCid] = useState<string | null>(null);
   const stageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
@@ -86,6 +88,7 @@ export default function ResultScreen() {
       stageTimers.current.forEach(clearTimeout);
       stageTimers.current = [];
       if (speechTimer.current) clearTimeout(speechTimer.current);
+      if (pollRef.current) clearInterval(pollRef.current);
       Speech.stop();
     };
   }, []);
@@ -95,7 +98,7 @@ export default function ResultScreen() {
     stageTimers.current = [];
   };
 
-  const handleAskHuman = () => {
+  const handleAskHuman = async () => {
     if (humanStage !== 'idle') return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Speech.stop();
@@ -103,36 +106,67 @@ export default function ResultScreen() {
     setHumanStage('freezing');
     Speech.speak('Securing community bounty for a volunteer...', { rate: 0.9, language: 'en-US' });
 
-    const t1 = setTimeout(() => {
-      setHumanStage('escrow');
-      Speech.speak('Securing community bounty on the Flow blockchain.', { rate: 0.9, language: 'en-US' });
+    try {
+      const helpReq = await createHelpRequest({
+        blindUserAddr: user?.addr ?? 'anonymous',
+        imageCid: imageCid ?? 'pending',
+        aiDescription: aiResult ?? '',
+        aiDescriptionHash: aiDescriptionHash ?? '',
+      });
+      setCurrentRequestId(helpReq.id);
+      setEscrowTxId(helpReq.flowEscrowTxId);
 
-      const t2 = setTimeout(() => {
-        setHumanStage('resolved');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        speechTimer.current = setTimeout(() => {
-          Speech.speak(MOCK_HUMAN_ANSWER, { rate: 0.85, pitch: 1.0, language: 'en-US' });
-        }, 300);
-        showToast();
+      setHumanStage('escrow');
+      Speech.speak('Request submitted. Waiting for a volunteer...', { rate: 0.9, language: 'en-US' });
+
+      // Poll for volunteer response every 3 seconds
+      pollRef.current = setInterval(async () => {
+        try {
+          const updated = await getHelpRequest(helpReq.id);
+          if (updated.filecoinCid) setFilecoinCid(updated.filecoinCid);
+          if (updated.status === 'resolved' && updated.volunteerAnswer) {
+            if (pollRef.current) clearInterval(pollRef.current);
+            pollRef.current = null;
+
+            setVolunteerAnswer(updated.volunteerAnswer);
+            setHumanStage('resolved');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setToastMessage(`Volunteer responded! Request resolved.`);
+            speechTimer.current = setTimeout(() => {
+              Speech.speak(updated.volunteerAnswer!, { rate: 0.85, pitch: 1.0, language: 'en-US' });
+            }, 300);
+            showToast();
+          }
+        } catch {
+          // Polling error — continue silently
+        }
       }, 3000);
-      stageTimers.current.push(t2);
-    }, 2000);
-    stageTimers.current.push(t1);
+    } catch (e) {
+      console.error('[Iris] Ask human failed:', e);
+      setHumanStage('idle');
+      Speech.speak('Could not submit request. Please try again.', { rate: 0.9, language: 'en-US' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
   };
 
   const handleAnalyzeAgain = () => {
     Speech.stop();
     clearStageTimers();
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setAiResult(null);
+    setAiDescriptionHash(null);
+    setImageCid(null);
     setBlockchainStatus('idle');
     setHumanStage('idle');
+    setVolunteerAnswer(null);
+    setCurrentRequestId(null);
     router.replace('/camera');
   };
 
   const handleReadAgain = () => {
     const textToRead =
-      humanStage === 'resolved' ? MOCK_HUMAN_ANSWER : aiResult ?? '';
+      humanStage === 'resolved' && volunteerAnswer ? volunteerAnswer : aiResult ?? '';
     const rate = humanStage === 'resolved' ? 0.85 : 0.9;
     if (textToRead) {
       Speech.stop();
@@ -173,18 +207,60 @@ export default function ResultScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {humanStage === 'resolved' ? (
+          {humanStage === 'resolved' && volunteerAnswer ? (
             <View style={styles.resolvedBlock}>
               <View style={styles.volunteerBadge}>
                 <Feather name="user-check" size={18} color={Colors.black} />
                 <Text style={styles.volunteerBadgeText}>Volunteer Answer</Text>
               </View>
-              <Text style={styles.resultText}>{MOCK_HUMAN_ANSWER}</Text>
+              <Text style={styles.resultText}>{volunteerAnswer}</Text>
             </View>
           ) : aiResult ? (
             <Text style={styles.resultText}>{aiResult}</Text>
           ) : (
             <Text style={styles.noResultText}>No result available.</Text>
+          )}
+
+          {/* Verification Proofs */}
+          {(aiDescriptionHash || imageCid || blockchainStatus === 'done') && (
+            <View style={styles.proofSection}>
+              <View style={styles.proofHeader}>
+                <Feather name="shield" size={16} color={Colors.yellow} />
+                <Text style={styles.proofHeaderText}>VERIFICATION</Text>
+              </View>
+
+              {aiDescriptionHash && (
+                <ProofRow
+                  icon="cpu"
+                  label="AI Proof"
+                  value={`sha256:${aiDescriptionHash.slice(0, 16)}...`}
+                />
+              )}
+
+              {imageCid && (
+                <ProofRow
+                  icon="hard-drive"
+                  label="IPFS"
+                  value={imageCid.slice(0, 20) + '...'}
+                />
+              )}
+
+              {blockchainStatus === 'done' && (
+                <ProofRow
+                  icon="link"
+                  label="Flow"
+                  value="Secured on-chain"
+                />
+              )}
+
+              {filecoinCid && (
+                <ProofRow
+                  icon="database"
+                  label="Filecoin"
+                  value={filecoinCid.slice(0, 20) + '...'}
+                />
+              )}
+            </View>
           )}
         </ScrollView>
       </Animated.View>
@@ -208,7 +284,7 @@ export default function ResultScreen() {
 
       {(humanStage === 'freezing' || humanStage === 'escrow') && (
         <Animated.View style={[styles.stagePanel, { transform: [{ scale: pulseAnim }] }]}>
-          <StageContent stage={humanStage} txId={MOCK_TX_ID} />
+          <StageContent stage={humanStage} txId={escrowTxId} />
         </Animated.View>
       )}
 
@@ -249,29 +325,39 @@ export default function ResultScreen() {
         pointerEvents="none"
       >
         <Feather name="zap" size={14} color={Colors.black} />
-        <Text style={styles.toastText}>{MOCK_TOAST}</Text>
+        <Text style={styles.toastText}>{toastMessage || 'Volunteer responded!'}</Text>
       </Animated.View>
     </View>
   );
 }
 
-function StageContent({ stage, txId }: { stage: HumanStage; txId: string }) {
+function ProofRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <View style={styles.proofRow}>
+      <Feather name={icon as any} size={14} color={Colors.yellow} />
+      <Text style={styles.proofLabel}>{label}</Text>
+      <Text style={styles.proofValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function StageContent({ stage, txId }: { stage: HumanStage; txId: string | null }) {
   if (stage === 'freezing') {
     return (
       <>
         <Feather name="upload-cloud" size={36} color={Colors.yellow} />
-        <Text style={styles.stageTitle}>Uploading to Storacha</Text>
-        <Text style={styles.stageSubtitle}>Securing your image to IPFS...</Text>
+        <Text style={styles.stageTitle}>Submitting Request</Text>
+        <Text style={styles.stageSubtitle}>Sending to volunteer network...</Text>
       </>
     );
   }
   if (stage === 'escrow') {
     return (
       <>
-        <Feather name="lock" size={36} color={Colors.yellow} />
-        <Text style={styles.stageTitle}>Flow Escrow Active</Text>
-        <Text style={styles.stageTxId}>{txId}</Text>
-        <Text style={styles.stageSubtitle}>Locking 1 FLOW from community pool...</Text>
+        <Feather name="clock" size={36} color={Colors.yellow} />
+        <Text style={styles.stageTitle}>Waiting for Volunteer</Text>
+        {txId && <Text style={styles.stageTxId}>{txId}</Text>}
+        <Text style={styles.stageSubtitle}>A sighted volunteer will respond shortly...</Text>
       </>
     );
   }
@@ -499,5 +585,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700' as const,
     fontFamily: 'Inter_700Bold',
+  },
+  proofSection: {
+    marginTop: 24,
+    backgroundColor: Colors.grayDark,
+    borderWidth: 1,
+    borderColor: Colors.grayMid,
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+  },
+  proofHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  proofHeaderText: {
+    color: Colors.yellow,
+    fontSize: 12,
+    fontWeight: '700' as const,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 2,
+  },
+  proofRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  proofLabel: {
+    color: Colors.grayLight,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    width: 70,
+  },
+  proofValue: {
+    color: Colors.white,
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    flex: 1,
+    opacity: 0.8,
   },
 });
